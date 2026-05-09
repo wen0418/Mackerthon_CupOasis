@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; 
 import 'home_page.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light, 
+  ));
+  
   runApp(const EcoNexusApp());
 }
 
@@ -13,12 +20,20 @@ class EcoNexusApp extends StatelessWidget {
     return MaterialApp(
       title: '永續之森 EcoNexus',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF2E7D32), // 現代森林綠
-          background: const Color(0xFFF5F7F5), // 帶有一點點綠意的低飽和灰白背景
-        ),
+      themeMode: ThemeMode.dark, 
+      darkTheme: ThemeData(
         useMaterial3: true,
+        brightness: Brightness.dark, 
+        
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF00C4B4), 
+          brightness: Brightness.dark,
+          primary: const Color(0xFF00C4B4),
+          surface: const Color(0xFF121212), // M3 取代 background 的寫法
+        ),
+        
+        scaffoldBackgroundColor: const Color(0xFF121212),
+        
         appBarTheme: const AppBarTheme(
           centerTitle: true,
           elevation: 0,

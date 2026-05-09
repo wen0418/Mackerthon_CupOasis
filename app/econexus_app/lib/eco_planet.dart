@@ -92,6 +92,8 @@ class _EcoPlanetState extends State<EcoPlanet> with TickerProviderStateMixin {
     return trees;
   }
 
+  // 修改後的 eco_planet.dart (build 方法)
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
@@ -100,36 +102,39 @@ class _EcoPlanetState extends State<EcoPlanet> with TickerProviderStateMixin {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // 旋轉的地球與樹木
+          // ==========================================
+          // 🌟 旋轉的地球 (現在使用圖片) 與樹木
+          // ==========================================
           RotationTransition(
             turns: _spinController,
             child: Stack(
               alignment: Alignment.center,
               children: [
-                // 海洋背景與陸地漸層
-                Container(
-                  width: 140,
-                  height: 140,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [Colors.lightBlueAccent.shade100, Colors.blue.shade700],
-                      center: const Alignment(-0.3, -0.5),
-                    ),
-                    boxShadow: [
-                      BoxShadow(color: Colors.blue.withOpacity(0.3), blurRadius: 20, spreadRadius: 5),
-                    ],
+                // --- 原本代碼 (刪除) ---
+                // Container( ... 海洋背景與漸層 ... ),
+                // Icon(Icons.public, ... ),
+                // -----------------------
+
+                // 🌟 新增：使用圖片作為地球基底
+                ClipRRect( // 確保圖片是圓形的
+                  borderRadius: BorderRadius.circular(70), // 半徑是 70
+                  child: Image.asset(
+                    'assets/EARTH.png', // 🌈 你的圖片路徑
+                    width: 140, // 與原本容器大小一致
+                    height: 140,
+                    fit: BoxFit.cover, // 確保圖片填滿，不變形
                   ),
                 ),
-                // 雲朵/陸地裝飾 (使用 Icon 營造感覺)
-                Icon(Icons.public, color: Colors.white.withOpacity(0.3), size: 140),
-                // 動態生長的樹木
+
+                // 🌟 依然保留：動態生長的樹木 (依然畫在圖片上方)
                 ..._buildTrees(),
               ],
             ),
           ),
 
-          // 飄浮的愛心 (獨立於旋轉之外，永遠直直往上飄)
+          // ==========================================
+          // 飄浮的愛心 (保持不變)
+          // ==========================================
           SlideTransition(
             position: _heartSlide,
             child: FadeTransition(
