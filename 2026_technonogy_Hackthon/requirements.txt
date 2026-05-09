@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlmodel
+pydantic
+streamlit
+pandas
+folium
+plotly
+streamlit-folium
+paho-mqtt

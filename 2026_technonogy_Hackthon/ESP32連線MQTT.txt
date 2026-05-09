@@ -1,0 +1,20 @@
+
+現在你的筆電已經是一台火力全開的伺服器了！接下來請交辦給負責 ESP32 的隊友：
+
+取得你的 IP：
+打開命令提示字元 (cmd)，輸入 ipconfig。找到你現在連的 Wi-Fi 網卡，記下你的 IPv4 位址 (通常是 192.168.x.x)。
+
+設定 ESP32 程式碼：
+請隊友在他的 Arduino/C++ 程式碼中這樣設定：
+
+MQTT_SERVER = "你的 IPv4 位址"
+
+MQTT_PORT = 1883
+
+MQTT_TOPIC = "sdg12/machine/sold"
+
+發送格式：
+當機台掉下商品時，請 ESP32 發送這串 JSON 字串：
+{"product_id": 1} (數字根據實際買的商品改)
+
+只要 ESP32 送出訊號，你的 mqtt_listener.py 就會立刻攔截，並在資料庫中把商品扣除，前端 APP 和後台就會同步更新！
