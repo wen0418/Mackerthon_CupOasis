@@ -10,7 +10,7 @@ from pydantic import BaseModel
 # ⚙️ 系統與 MQTT 設定
 # ==========================================
 # 🚨 填入你目前的筆電 IP
-MQTT_BROKER = "10.245.39.41" 
+MQTT_BROKER = "172.26.43.41" 
 MQTT_PORT = 1883
 
 sqlite_file_name = "database.db"

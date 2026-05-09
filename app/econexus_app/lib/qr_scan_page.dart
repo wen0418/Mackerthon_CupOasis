@@ -31,61 +31,69 @@ class _QRScanPageState extends State<QRScanPage> {
     print("🌸 [進入藍牙函式] 啟動藍牙掃描，尋找花花吊飾...");
     
     try {
-      // 🌟 新增：第一步先動態請求所有需要的權限
+      // 1. 請求權限
       Map<Permission, PermissionStatus> statuses = await [
         Permission.bluetoothScan,
         Permission.bluetoothConnect,
-        Permission.location, // 舊版 Android 需要定位權限才能掃描藍牙
+        Permission.location, 
       ].request();
 
-      // 檢查權限是否被拒絕
+      // 🔍 【除錯模式】把每一個權限的真實結果印出來！
+      print("🔍 [權限檢查] Bluetooth Scan: ${statuses[Permission.bluetoothScan]}");
+      print("🔍 [權限檢查] Bluetooth Connect: ${statuses[Permission.bluetoothConnect]}");
+      print("🔍 [權限檢查] Location: ${statuses[Permission.location]}");
+
       if (statuses[Permission.bluetoothScan]?.isDenied == true ||
           statuses[Permission.bluetoothConnect]?.isDenied == true) {
-        print("❌ [錯誤] 使用者拒絕了藍牙權限，無法掃描！");
-        // 這裡可以考慮跳出一個 AlertDialog 提醒使用者去設定裡開啟
+        print("❌ [錯誤] 使用者或系統拒絕了藍牙權限！(如果一直 denied，請檢查 AndroidManifest.xml)");
         return;
       }
 
-      // 🌟 防呆：檢查裝置是否支援藍牙
+      // 2. 防呆
       if (await FlutterBluePlus.isSupported == false) {
-        print("❌ [錯誤] 此裝置不支援藍牙 (請確認是否使用實體手機測試)！");
+        print("❌ [錯誤] 此裝置不支援藍牙 (請確認是否使用實體手機)！");
         return;
       }
 
-      // 🌟 加上 Timeout 防止 await 卡死，並正確獲取狀態
-      final adapterState = await FlutterBluePlus.adapterState.first.timeout(
-        const Duration(seconds: 3),
-        onTimeout: () {
-          print("⚠️ [警告] 取得藍牙狀態超時！");
-          return BluetoothAdapterState.unknown;
-        },
-      );
+      // 3. 暴力喚醒藍牙：有時候底層沒醒來，狀態就會一直是 unknown
+      try {
+        print("⚡ 嘗試強制喚醒藍牙適配器...");
+        await FlutterBluePlus.turnOn(); // 這行會觸發系統藍牙開啟，並初始化底層
+        await Future.delayed(const Duration(seconds: 1)); // 給硬體一秒鐘反應
+      } catch (e) {
+        print("⚠️ 喚醒藍牙時發生警告 (有時可忽略): $e");
+      }
 
-      // 如果權限有了，但藍牙沒開
-      if (adapterState == BluetoothAdapterState.off) {
-         print("❌ [錯誤] 手機藍牙未開啟，嘗試喚起開啟藍牙設定...");
-         // 在 Android 上可以嘗試強制開啟藍牙 (選用)
-         await FlutterBluePlus.turnOn();
+      // 4. 改用 adapterStateNow 直接讀取目前狀態，不要用 Stream 避免卡死
+      // (注意：需要 flutter_blue_plus 較新版本支援)
+      var currentState = FlutterBluePlus.adapterStateNow;
+      print("📡 [當前藍牙真實狀態]: $currentState");
+
+      // 如果還是 unknown，我們再等最後 2 秒看看
+      if (currentState == BluetoothAdapterState.unknown) {
+        print("⏳ 狀態仍為 unknown，等待 2 秒讓系統回神...");
+        await Future.delayed(const Duration(seconds: 2));
+        currentState = FlutterBluePlus.adapterStateNow;
+        print("📡 [等待後藍牙狀態]: $currentState");
+      }
+
+      if (currentState == BluetoothAdapterState.off) {
+         print("❌ [錯誤] 手機藍牙未開啟，請手動拉下選單開啟藍牙！");
          return;
       }
 
-      if (adapterState != BluetoothAdapterState.on) {
-        print("❌ [錯誤] 藍牙狀態異常！目前狀態: $adapterState");
+      if (currentState != BluetoothAdapterState.on) {
+        print("❌ [錯誤] 藍牙狀態異常，無法掃描！最終狀態: $currentState");
         return;
       }
 
-      // ================= 以下為原本的掃描邏輯 =================
-      print("✅ 權限與狀態皆正常，開始掃描 10 秒...");
-      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 10));
+      print("✅ 藍牙引擎啟動成功！準備開始掃描...");
 
-      // ================= 以下為你原本的掃描邏輯 =================
-      // 🌟 把掃描時間拉長到 10 秒
-      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 10));
-
+      // 🌟 4. 修正順序：必須「先設定監聽器」，「再開始掃描」
       var subscription = FlutterBluePlus.scanResults.listen((results) async {
         for (ScanResult r in results) {
           
-          // 🌟 雷達掃描：抓取裝置名稱
+          // 雷達掃描：抓取裝置名稱
           String deviceName = r.device.platformName;
           if (deviceName.isEmpty) {
             deviceName = r.advertisementData.advName;
@@ -95,7 +103,7 @@ class _QRScanPageState extends State<QRScanPage> {
             print("📡 [雷達] 發現裝置: $deviceName (ID: ${r.device.remoteId})");
           }
 
-          // 🌟 防呆：不分大小寫比對名稱
+          // 防呆：不分大小寫比對名稱
           if (deviceName.toLowerCase() == "econexus_flower".toLowerCase()) {
             print("🎯 [找到裝置] 找到花花吊飾！準備連線...");
             FlutterBluePlus.stopScan(); 
@@ -134,8 +142,12 @@ class _QRScanPageState extends State<QRScanPage> {
           }
         }
       });
+
+      // 🌟 5. 啟動掃描 (刪除了你原本重複的 startScan 呼叫)
+      print("🔍 開始掃描 (10秒)...");
+      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 10));
+
     } catch (e) {
-      // 🌟 現在任何藍牙權限、狀態檢查的錯誤都會被接住在這
       print("❌ [掃描錯誤] 藍牙啟動或狀態檢查失敗: $e");
     }
   }
@@ -233,7 +245,7 @@ class _QRScanPageState extends State<QRScanPage> {
       try {
         final bool isRent = widget.actionType == 'rent';
         final String endpoint = isRent ? '/api/rent' : '/api/return';
-        final Uri url = Uri.parse('http://10.245.39.41:8000$endpoint');
+        final Uri url = Uri.parse('http://172.26.43.41:8000$endpoint');
 
         final response = await http.post(
           url,

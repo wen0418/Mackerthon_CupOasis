@@ -16,7 +16,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   // 🚨 統一管理你的後端 IP (請確認是你目前手機熱點的 IP)
-  final String apiBaseUrl = 'http://10.245.39.41:8000'; 
+  final String apiBaseUrl = 'http://172.26.43.41:8000'; 
   
   List<Marker> _machineMarkers = [];
   bool _isLoading = true;
