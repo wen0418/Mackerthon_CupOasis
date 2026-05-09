@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'machine_detail_page.dart';
 import 'qr_scan_page.dart';
+import 'eco_planet.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -150,6 +151,11 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.only(top: 10, bottom: 5),
+            child: EcoPlanet(returnCount: _returnCount), // 將真實的循環次數傳入
           ),
 
           // ==========================================

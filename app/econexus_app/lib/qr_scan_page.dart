@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart'; // 🌟 引入藍牙套件
+import 'package:permission_handler/permission_handler.dart';
 
 class QRScanPage extends StatefulWidget {
-  final String actionType; // 傳入 'rent' (租借) 或 'return' (歸還)
+  final String actionType; // 傳入 'rent' 或 'return'
 
   const QRScanPage({super.key, required this.actionType});
 
@@ -22,6 +24,125 @@ class _QRScanPageState extends State<QRScanPage> {
     super.dispose();
   }
 
+  // ==========================================
+  // 🌸 藍牙觸發核心邏輯 (背景執行不卡 UI)
+  // ==========================================
+  Future<void> _triggerFlowerBloom() async {
+    print("🌸 [進入藍牙函式] 啟動藍牙掃描，尋找花花吊飾...");
+    
+    try {
+      // 🌟 新增：第一步先動態請求所有需要的權限
+      Map<Permission, PermissionStatus> statuses = await [
+        Permission.bluetoothScan,
+        Permission.bluetoothConnect,
+        Permission.location, // 舊版 Android 需要定位權限才能掃描藍牙
+      ].request();
+
+      // 檢查權限是否被拒絕
+      if (statuses[Permission.bluetoothScan]?.isDenied == true ||
+          statuses[Permission.bluetoothConnect]?.isDenied == true) {
+        print("❌ [錯誤] 使用者拒絕了藍牙權限，無法掃描！");
+        // 這裡可以考慮跳出一個 AlertDialog 提醒使用者去設定裡開啟
+        return;
+      }
+
+      // 🌟 防呆：檢查裝置是否支援藍牙
+      if (await FlutterBluePlus.isSupported == false) {
+        print("❌ [錯誤] 此裝置不支援藍牙 (請確認是否使用實體手機測試)！");
+        return;
+      }
+
+      // 🌟 加上 Timeout 防止 await 卡死，並正確獲取狀態
+      final adapterState = await FlutterBluePlus.adapterState.first.timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {
+          print("⚠️ [警告] 取得藍牙狀態超時！");
+          return BluetoothAdapterState.unknown;
+        },
+      );
+
+      // 如果權限有了，但藍牙沒開
+      if (adapterState == BluetoothAdapterState.off) {
+         print("❌ [錯誤] 手機藍牙未開啟，嘗試喚起開啟藍牙設定...");
+         // 在 Android 上可以嘗試強制開啟藍牙 (選用)
+         await FlutterBluePlus.turnOn();
+         return;
+      }
+
+      if (adapterState != BluetoothAdapterState.on) {
+        print("❌ [錯誤] 藍牙狀態異常！目前狀態: $adapterState");
+        return;
+      }
+
+      // ================= 以下為原本的掃描邏輯 =================
+      print("✅ 權限與狀態皆正常，開始掃描 10 秒...");
+      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 10));
+
+      // ================= 以下為你原本的掃描邏輯 =================
+      // 🌟 把掃描時間拉長到 10 秒
+      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 10));
+
+      var subscription = FlutterBluePlus.scanResults.listen((results) async {
+        for (ScanResult r in results) {
+          
+          // 🌟 雷達掃描：抓取裝置名稱
+          String deviceName = r.device.platformName;
+          if (deviceName.isEmpty) {
+            deviceName = r.advertisementData.advName;
+          }
+          
+          if (deviceName.isNotEmpty) {
+            print("📡 [雷達] 發現裝置: $deviceName (ID: ${r.device.remoteId})");
+          }
+
+          // 🌟 防呆：不分大小寫比對名稱
+          if (deviceName.toLowerCase() == "econexus_flower".toLowerCase()) {
+            print("🎯 [找到裝置] 找到花花吊飾！準備連線...");
+            FlutterBluePlus.stopScan(); 
+            
+            try {
+              await r.device.connect(timeout: const Duration(seconds: 5));
+              print("✅ [連線成功] 正在尋找服務信箱...");
+
+              List<BluetoothService> services = await r.device.discoverServices();
+              for (BluetoothService service in services) {
+                if (service.uuid.toString().toLowerCase() == "4fafc201-1fb5-459e-8fcc-c5c9c331914b".toLowerCase()) {
+                  print("📬 [找到服務] 找到花花專屬服務！");
+                  
+                  for (BluetoothCharacteristic c in service.characteristics) {
+                    if (c.uuid.toString().toLowerCase() == "beb5483e-36e1-4688-b7f5-ea07361b26a8".toLowerCase()) {
+                      print("✉️ [找到特徵值] 準備寫入 BLOOM 指令...");
+                      
+                      await c.write(utf8.encode("BLOOM"), withoutResponse: true);
+                      print("🌸 [發射完成] BLOOM 指令已送出！實體花朵應該要動了！");
+                      
+                      Future.delayed(const Duration(seconds: 3), () {
+                        r.device.disconnect();
+                        print("🔌 藍牙已安全斷開。");
+                      });
+                      
+                      return; 
+                    }
+                  }
+                }
+              }
+              print("⚠️ [警告] 連線成功，但沒有找到對應的 UUID 信箱。");
+            } catch (e) {
+              print("❌ [連線錯誤] 連線或傳輸失敗: $e");
+              r.device.disconnect();
+            }
+          }
+        }
+      });
+    } catch (e) {
+      // 🌟 現在任何藍牙權限、狀態檢查的錯誤都會被接住在這
+      print("❌ [掃描錯誤] 藍牙啟動或狀態檢查失敗: $e");
+    }
+  }
+
+  // ==========================================
+  // 📷 UI 與掃碼邏輯
+  // ==========================================
   @override
   Widget build(BuildContext context) {
     final isRent = widget.actionType == 'rent';
@@ -41,8 +162,6 @@ class _QRScanPageState extends State<QRScanPage> {
               valueListenable: _cameraController,
               builder: (context, state, child) {
                 switch (state.torchState) {
-                  case TorchState.off:
-                    return const Icon(Icons.flash_off, color: Colors.grey);
                   case TorchState.on:
                     return const Icon(Icons.flash_on, color: Colors.yellow);
                   case TorchState.auto:
@@ -98,45 +217,46 @@ class _QRScanPageState extends State<QRScanPage> {
     );
   }
 
-  // 🌟 核心修改：當相機偵測到 QR Code 時觸發 API
   void _onDetect(BarcodeCapture capture) async {
     if (_isProcessing) return;
 
     final List<Barcode> barcodes = capture.barcodes;
     if (barcodes.isNotEmpty && barcodes.first.rawValue != null) {
-      final String qrCodeData = barcodes.first.rawValue!; // 掃到的機台 ID，例如 "M001"
+      final String qrCodeData = barcodes.first.rawValue!; 
 
       setState(() {
         _isProcessing = true;
       });
 
-      // 暫停相機，避免重複掃描
       _cameraController.stop();
 
       try {
-        // 🚨 這裡直接使用你目前的筆電 IP (手機熱點環境)
-        final String endpoint = widget.actionType == 'rent' ? '/api/rent' : '/api/return';
+        final bool isRent = widget.actionType == 'rent';
+        final String endpoint = isRent ? '/api/rent' : '/api/return';
         final Uri url = Uri.parse('http://10.245.39.41:8000$endpoint');
 
-        // 發送 POST 請求給 FastAPI 大腦
         final response = await http.post(
           url,
           headers: {'Content-Type': 'application/json'},
           body: json.encode({
-            'user_id': 1, // Demo 階段先寫死預設使用者 ID 為 1
+            'user_id': 1, 
             'machine_id': qrCodeData,
           }),
         );
 
         if (!mounted) return;
 
-        // 判斷後端回傳的狀態碼
         if (response.statusCode == 200) {
-          // 成功！大腦已經同意並通知樹莓派開門了
+          
+          // ==========================================
+          // 🌸 魔法發生的瞬間：如果是歸還，觸發花朵綻放！
+          // ==========================================
+          if (!isRent) {
+            _triggerFlowerBloom(); 
+          }
+          
           _showSuccessDialog(qrCodeData);
         } else {
-          // 失敗！(例如：機台沒杯子、防呆機制擋下)
-          // 嘗試解析後端傳來的錯誤訊息 (detail)
           String errorMsg = '發生未知錯誤';
           try {
             final errorData = json.decode(utf8.decode(response.bodyBytes));
@@ -151,7 +271,6 @@ class _QRScanPageState extends State<QRScanPage> {
         if (!mounted) return;
         _showErrorDialog('網路連線失敗，請確認後端是否啟動且在同一區網下。');
       } finally {
-        // 如果對話框被關掉且沒有離開頁面，將狀態重置
         if (mounted) {
           setState(() {
             _isProcessing = false;
@@ -161,7 +280,6 @@ class _QRScanPageState extends State<QRScanPage> {
     }
   }
 
-  // ✅ 成功畫面
   void _showSuccessDialog(String machineId) {
     final isRent = widget.actionType == 'rent';
     
@@ -201,8 +319,8 @@ class _QRScanPageState extends State<QRScanPage> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             onPressed: () {
-              Navigator.of(context).pop(); // 關閉 Dialog
-              Navigator.of(context).pop(); // 返回 HomePage
+              Navigator.of(context).pop(); 
+              Navigator.of(context).pop(); 
             },
             child: const Text('完成', style: TextStyle(color: Colors.white, fontSize: 16)),
           ),
@@ -211,7 +329,6 @@ class _QRScanPageState extends State<QRScanPage> {
     );
   }
 
-  // ❌ 錯誤畫面 (被後端擋下時觸發)
   void _showErrorDialog(String errorMessage) {
     showDialog(
       context: context,
@@ -226,16 +343,9 @@ class _QRScanPageState extends State<QRScanPage> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              '無法完成操作',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
+            const Text('無法完成操作', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-            Text(
-              errorMessage,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, color: Colors.redAccent),
-            ),
+            Text(errorMessage, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, color: Colors.redAccent)),
           ],
         ),
         actionsAlignment: MainAxisAlignment.center,
@@ -247,8 +357,8 @@ class _QRScanPageState extends State<QRScanPage> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             onPressed: () {
-              Navigator.of(context).pop(); // 關閉 Dialog
-              _cameraController.start(); // 重新啟動相機，讓使用者可以再次掃描
+              Navigator.of(context).pop(); 
+              _cameraController.start(); 
             },
             child: const Text('了解，重試', style: TextStyle(color: Colors.black87, fontSize: 16)),
           ),
